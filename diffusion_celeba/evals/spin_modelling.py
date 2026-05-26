@@ -84,9 +84,3 @@ def compute_pseudolikelihood(spins, h, J):
 
     # Sum over all attributes to get the log-pseudolikelihood of each configuration
     return log_p.sum(axis=1)
-
-
-def compute_pseudolikelihood_only_h(spins, h):
-    H = h
-    log_p = -np.logaddexp(0, -2 * spins * H)
-    return log_p.sum(axis=1)

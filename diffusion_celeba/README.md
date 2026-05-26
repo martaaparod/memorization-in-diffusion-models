@@ -17,7 +17,7 @@ The checkpoint used is available here, and should be placed in [evals](diffusion
 
 The code (must be run from within the [diffusion_celeba](diffusion_celeba) directory) can be 
 used to:
-1. Train diffusion models, take checkpoints of the U-Net, sample images and store the statistics of 
+1. Train diffusion models, save checkpoints of the U-Net, sample images and store the statistics of 
 the generated batch:
     - FID score
     - Fraction of memorized images

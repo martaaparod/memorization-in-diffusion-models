@@ -89,6 +89,8 @@ def compute_loglikelihood_samples(samples, batch_size=128, ising_params_path='ev
         convert_labels_to_spins(preds.cpu().numpy()[:, ind_keep]), h, J
     )
 
+    print(f'Average log-likelihood: {np.mean(pl_est)}')
+
     return pl_est
 
 
