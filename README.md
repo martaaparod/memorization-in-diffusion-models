@@ -1,1 +1,1 @@
-# diffusion_models_preferentially_memorize_prototypical_examples
+# Diffusion Models Preferentially Memorize Prototypical Examples or: Why Does My Diffusion Model Love Slop?
