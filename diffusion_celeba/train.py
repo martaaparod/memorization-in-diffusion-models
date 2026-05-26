@@ -68,8 +68,8 @@ def eval_checkpoint(epoch, diffusion, X, sample_size, n_batches, save_dir, save_
     torch.save(res_dict, logs_dir)
 
 
-def train_diffusion(diffusion, train_dataset, testloader, lr, epochs, sample_batch_size=2000,  sample_n_batches=25, save_frequency=2,
-                    save_dir='results', batch_size=64, resume_epoch=None):
+def train_diffusion(diffusion, train_dataset, testloader, lr, epochs, sample_batch_size=2000,  sample_n_batches=25,
+                    save_frequency=2, save_dir='results', batch_size=64, resume_epoch=None):
     # build optimizer
     optimizer = torch.optim.Adam(diffusion.unet.parameters(), lr=lr)
 
