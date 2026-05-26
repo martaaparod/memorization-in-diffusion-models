@@ -21,7 +21,7 @@ def build_training_tensor(dataset, device='cpu', batch_size=256):
 
 def compute_knn(samples, X, k=2, chunk_size=1000):
     '''
-    Computes k-smaller distances and k-nearest neighbours of elements in samples to elements in X
+    Computes k-smallest distances and k-nearest neighbours of elements in samples to elements in X
     Args:
     samples: torch tensor, flattened (B, C*H*W)
     X: torch tensor, flattened (N, C*H*W)
@@ -44,7 +44,7 @@ def compute_knn(samples, X, k=2, chunk_size=1000):
 
 def compute_mem(X, all_samples, n_batches, sample_size, gap_threshold=1/3):
     '''
-    Compute fraction of generated samples that memorize the training set
+    Computes fraction of generated samples that memorize the training set
     Args:
     checkpoint_dir: str, directory to store results
     X: torch tensor, containing train images (flattened across non-batch dimension)
