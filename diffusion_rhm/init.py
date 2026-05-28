@@ -209,11 +209,10 @@ def init_eval_func(rules, bp, args, dataset):
             "Time_losses": partial(compute_d3pm_loss_per_time, 10, 1),
             "Test_losses": partial(compute_d3pm_loss_per_time, 10, 1),
             "True_losses": partial(compute_d3pm_loss_per_time, 10, 1, bp=bp),
-            "Fraction_of_copies": partial(
-                compare_with_trainset, dataset[: args.train_size]
-            ),
-            "Hierarchical_copies": partial(hierarhical_copies, dataset=dataset[: args.train_size], num_layers=args.num_layers, tuple_size=args.tuple_size),
-            "Valid_samples": partial(check_rules, bp=bp, trainset=dataset[: args.train_size], zipf_layer=args.layer),
+            "Fraction_of_copies": partial(compare_with_trainset, dataset[: args.train_size]),
+            "Hierarchical_copies": partial(hierarhical_copies, dataset=dataset[: args.train_size],
+                                           num_layers=args.num_layers, tuple_size=args.tuple_size),
+            "Valid_samples": partial(check_rules, bp=bp, trainset=dataset[: args.train_size]),
         }
 
 

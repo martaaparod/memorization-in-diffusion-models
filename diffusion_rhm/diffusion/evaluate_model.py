@@ -243,7 +243,7 @@ def compute_d3pm_loss_per_time(n_windows, points_per_window, model, x0, bp=False
         return time_losses
 
 
-def check_rules(samples, bp, trainset, zipf_layer=None):
+def check_rules(samples, bp, trainset):
     """
     Check if the generated data is consistent with the rules.
 
@@ -257,108 +257,20 @@ def check_rules(samples, bp, trainset, zipf_layer=None):
     """
 
     x = torch.argmax(samples, dim=1) # B, d
-    frac_correct, rules_frequencies, compatible_positions = BP_countcorrect_upward(x, bp)
-
+    frac_correct, compatible_positions = BP_countcorrect_upward(x, bp)
     frac_valid = frac_correct[0].item()
-    # count the layers starting from the leaves (layer 0)
+
+    # reverse keys count the layers starting from the leaves (layer 0)
     frac_valid_per_layer = {bp.L-key : frac_correct[key].cpu() for key in frac_correct.keys()}
     frac_valid_per_layer = dict(sorted(frac_valid_per_layer.items()))
-    rules_frequencies_per_layer = {bp.L-key : rules_frequencies[key].cpu() for key in rules_frequencies.keys()}
-    rules_frequencies_per_layer = dict(sorted(rules_frequencies_per_layer.items()))
 
     compatible_positions = {bp.L-key : compatible_positions[key] for key in compatible_positions.keys()}
     compatible_positions = dict(sorted(compatible_positions.items()))
-    compatible_indices = positions_to_indices_per_layer(compatible_positions)
 
-    samples_copies = get_copy_indices(trainset, samples)
-    fraction_memorised = fraction_memorised_per_rule_per_layer(samples_copies, compatible_indices)
+    total_valid_per_rule_layer, total_mem_per_rule_layer = process_sample_tuples(trainset, samples, compatible_positions,
+                                                                                 bp.s, bp.m * bp.v)
 
-    tuples_memorised_per_layer = process_sample_tuples(trainset, samples, compatible_positions, bp.s, bp.L-zipf_layer+1)
-
-    return frac_valid, frac_valid_per_layer, rules_frequencies_per_layer, fraction_memorised, tuples_memorised_per_layer
-
-
-def positions_to_indices_per_layer(compatible_positions):
-    """
-    Extract unique batch indices compatible with each rule.
-
-    Args:
-        compatible_positions:
-            dict[layer] -> LongTensor[N,3]
-
-            columns:
-                [rule_id, batch_idx, position_idx]
-
-    Returns:
-        dict[layer] -> dict[rule_id] -> LongTensor[batch_indices]
-    """
-
-    out = {}
-
-    for layer, coords in compatible_positions.items():
-
-        layer_out = {}
-
-        if coords.numel() == 0:
-            out[layer] = layer_out
-            continue
-
-        rules = torch.unique(coords[:, 0])
-
-        for rule in rules:
-            mask = coords[:, 0] == rule
-            batch_indices = torch.unique(coords[mask][:, 1])
-
-            layer_out[int(rule.item())] = batch_indices
-
-        out[layer] = layer_out
-
-    return out
-
-
-
-def get_copy_indices(trainset, samples):
-    '''
-    Returns a tensor where each entry is 1 if that sample is an exact duplicate of the trainset and 0 otherwise
-    '''
-    samples_flat = samples.reshape(samples.shape[0], -1)
-    trainset_flat = trainset.reshape(trainset.shape[0], -1)
-
-    matches = (samples_flat.unsqueeze(1) == trainset_flat.unsqueeze(0)).all(dim=2)
-    samples_copies = matches.any(dim=1).int()
-
-    return samples_copies
-
-
-def fraction_memorised_per_rule_per_layer(samples_copies, compatible_indices):
-    """
-    samples_copies: 1D tensor of shape (B,) with 0/1 indicating whether sample b is memorised.
-    compatible_indices: dict[layer] -> OrderedDict[rule_id] -> 1D LongTensor[sample_indices]
-        For each layer and each rule, gives the indices of samples where the rule is compatible.
-    """
-    fraction_memorised = {}
-
-    for layer, compatible_indices_layer in compatible_indices.items():
-        frac = torch.zeros(len(compatible_indices_layer), dtype=torch.float32)
-
-        for i, (rule_id, indices) in enumerate(compatible_indices_layer.items()):
-            if indices.numel() == 0:
-                frac[i] = 0.0
-                continue
-
-            unique_idx = torch.unique(indices)
-            denom = unique_idx.numel()  # number of samples where rule is compatible
-            num = samples_copies[unique_idx].sum()  # number of memorised samples among them
-
-            if denom == 0:
-                frac[i] = float('nan')
-            else:
-                frac[i] = num / denom
-
-        fraction_memorised[layer] = frac
-
-    return fraction_memorised
-
+    return frac_valid, frac_valid_per_layer, total_valid_per_rule_layer, total_mem_per_rule_layer
 
 
 
@@ -420,131 +332,27 @@ def get_tuples_in_dataset(dataset, test_layer, tuple_size):
     return unique_substrings.reshape(unique_substrings.shape[0], -1, size_string), counts
 
 
-def process_sample_tuples(trainset, samples, compatible_positions, tuple_size, zipf_layer):
+def get_rule_tuples(coords, samples, test_layer, tuple_size):
+    """
+    Creates a dict with key rule_idx and value all valid tuples at test_layer
+    Returns:
+    dict[rule_id] -> list of Torch tensors (tuples for each rule)
+    """
 
-    tuple_memorisation = {}
-    total_tuples = {}
-    zipf_tuple_res = {}
+    rule_dict = {}
 
-    for test_layer in compatible_positions.keys():
+    for rule_idx, batch_idx, pos_idx in coords:
+        # get tuples from samples relevant to rule_idx
+        datapoint = samples[batch_idx]
+        tuples_datapoint = datapoint.reshape(datapoint.shape[0], -1, tuple_size ** test_layer)
+        relevant = tuples_datapoint[:, pos_idx]
 
-        trainset_tuples, count = get_tuples_in_dataset(trainset, test_layer, tuple_size)
-        coords = compatible_positions[test_layer]
+        # leave empty if no tuples
+        if rule_idx not in rule_dict:
+            rule_dict[rule_idx] = []
 
-        # unique rules present
-        unique_rules = torch.unique(coords[:, 0])
-        max_rule = int(unique_rules.max().item()) + 1
-
-        copy_tuples_per_rule = torch.full((max_rule,), float('nan'))
-        total_tuples_per_rule = torch.zeros(max_rule)
-
-        if zipf_layer == test_layer:
-            tuples_memorised, rules = analyse_datapoints_tuples(trainset_tuples, samples, coords, tuple_size ** test_layer)
-            datapoint_memorised = datapoint_memorised_exact(trainset, samples)
-
-            results = {
-                'exact_memorised': datapoint_memorised,
-                'tuples_memorised': tuples_memorised,
-                'rules_tuples': rules
-            }
-
-        # iterate through rules
-        for rule in unique_rules:
-
-            rule = int(rule.item())
-
-            # rows corresponding to this rule
-            rule_rows = coords[coords[:, 0] == rule]
-
-            collected = []
-
-            # iterate through compatible entries
-            for _, batch_idx, pos_idx in rule_rows:
-
-                batch_idx = int(batch_idx.item())
-                pos_idx = int(pos_idx.item())
-                datapoint = samples[batch_idx]
-                tuples_datapoint = datapoint.reshape(datapoint.shape[0], -1, tuple_size ** test_layer)
-                relevant_tuples = tuples_datapoint[:, pos_idx]
-
-                collected.append(relevant_tuples.unsqueeze(0))
-
-            # compare against trainset tuples
-            if collected:
-                collected_tuples_tensor = torch.cat(collected, dim=0)
-                mask = compare_rows(collected_tuples_tensor, trainset_tuples)
-                copy_tuples_per_rule[rule] = (torch.sum(mask).item() / collected_tuples_tensor.shape[0])
-                total_tuples_per_rule[rule] = torch.sum(mask).item()
-
-                if zipf_layer == test_layer:
-
-                    count_train, count_sample = (
-                        sample_frequency_in_train_per_rule(
-                            collected_tuples_tensor,
-                            trainset_tuples,
-                            count
-                        )
-                    )
-
-                    zipf_tuple_res[rule] = {
-                        'train': count_train.cpu(),
-                        'samples': count_sample.cpu()
-                    }
-
-        tuple_memorisation[test_layer] = copy_tuples_per_rule
-        total_tuples[test_layer] = total_tuples_per_rule
-
-    return ((tuple_memorisation, total_tuples, results, zipf_tuple_res) if zipf_layer is not None else
-            (tuple_memorisation, total_tuples)
-    )
-
-
-def datapoint_memorised_exact(trainset, samples):
-    B, v, d = samples.shape
-    P = trainset.shape[0]
-    a = samples.reshape(B, -1)
-    b = trainset.reshape(P, -1)
-    eq = (a[:, None] == b[None, :]).all(dim=2)   # (B, P)
-    return eq.any(dim=1).float().cpu()
-
-
-def analyse_datapoints_tuples(tuples_trainset, samples, compatible_positions_per_layer, tuples_size_layer):
-    B, v, d = samples.shape
-
-    tuples_memorised = torch.zeros((B, d // tuples_size_layer))
-    rules = torch.full((B, d // tuples_size_layer), -1)
-
-    # Reshape samples in batches of tuples
-    samples = samples.reshape(B, v, d // tuples_size_layer, tuples_size_layer)
-
-    # check if tuples at each position is memorised
-    for position in range(d // tuples_size_layer):
-        tuples_samples = samples[:, :, position, :]
-        match = (tuples_samples[:, None] == tuples_trainset[None, :]).all(dim=(2, 3))
-
-        tuples_memorised[:, position] = match.any(dim=1).float().cpu()
-
-    # fill rule ids from compatibility map: rules[b, pos] = rule_id (leave -1 if none)
-    for rule_id, sample_dict in compatible_positions_per_layer.items():
-        if not sample_dict:
-            continue
-        for b, pos_idx in sample_dict.items():
-            if pos_idx.numel() == 0:
-                continue
-            rules[int(b), pos_idx.to(dtype=torch.long,)] = rule_id
-
-    return tuples_memorised, rules
-
-
-
-def sample_frequency_in_train_per_rule(sample_tuples, unique_trainset_tuples, count_unique_trainset_tuples):
-    unique_sample_tuples, count_unique_sample_tuples = torch.unique(sample_tuples, dim=0, return_counts=True)
-
-    eq = (unique_sample_tuples[:, None, :] == unique_trainset_tuples[None, :, :]).all(dim=(2, 3))
-
-    train_counts_per_sample = (eq.float() @ count_unique_trainset_tuples.float())
-
-    return train_counts_per_sample, count_unique_sample_tuples
+        rule_dict[rule_idx].append(relevant.unsqueeze(0))
+    return rule_dict
 
 
 def compare_rows(input_samples, reference_samples):
@@ -552,5 +360,52 @@ def compare_rows(input_samples, reference_samples):
     row_match = eq.all(dim=(2, 3))
     mask = row_match.any(dim=1)
     return mask.int()
+
+
+def get_rule_tuple_stats(rule_dict, trainset_tuples, num_rules):
+    """
+    Finds the total number of valid and memorized tuples per rule
+    Returns:
+    val: torch Tensor, size (num_rules,)
+    mem: torch Tensor, size (num_rules,)
+    """
+
+    val = torch.zeros((num_rules,))
+    mem = torch.zeros(num_rules)
+
+    for rule, tensors in rule_dict.items():
+
+        collected = torch.cat(tensors, dim=0)
+        mask = compare_rows(collected, trainset_tuples)
+
+        val[rule] = collected.shape[0]
+        mem[rule] = mask.sum().item()
+
+    return val, mem
+
+
+def process_sample_tuples(trainset, samples, compatible_positions, tuple_size, num_rules):
+    '''
+    Computes total valid and memorized tuples per rule at all levels of the hierarchy
+    Returns:
+    valid_tuples: dict, {level_idx: torch.Tensor}
+    memorized_tuples: dict, {level_idx: torch.Tensor}
+    '''
+    valid_tuples = {}
+    memorized_tuples = {}
+
+    for test_layer, coords in compatible_positions.items():
+        trainset_tuples, _ = get_tuples_in_dataset(trainset, test_layer, tuple_size)
+
+        # collect rule tuples
+        rule_dict = get_rule_tuples(coords, samples, test_layer, tuple_size)
+
+        # compute stats
+        val, mem = get_rule_tuple_stats(rule_dict, trainset_tuples, num_rules)
+        valid_tuples[test_layer] = val
+        memorized_tuples[test_layer] = mem
+
+    return valid_tuples, memorized_tuples
+
 
 

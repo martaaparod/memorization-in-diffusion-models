@@ -190,7 +190,7 @@ def sample_unique_data_from_labels(target_size, num_classes, rules, probability)
     1. Generates a batch
     2. Keeps unique elements
     2. Generates a batch of missing size
-    3. Repeats steps until a unique batc is created
+    3. Repeats steps until a unique batch is created
     """
     seen = set()
 

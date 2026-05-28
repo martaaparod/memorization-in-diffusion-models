@@ -312,7 +312,6 @@ def BP_countcorrect_upward(x, bp):
 
     nu_up = {}
     frac_correct = {}
-    rules_frequencies = {}
     compatible_positions = {}
 
     nu_up[bp.L] = bp.set_evidence_to_leaf_messages(x, noise=0.0) # set the evidence to the leaf messages
@@ -324,19 +323,18 @@ def BP_countcorrect_upward(x, bp):
 
         proba_rules = proba_rules.reshape(bp.v, bp.m, B, -1) # proba rules for each variable (v, m, B * s**l)
         frac_correct[l] = proba_rules.sum(dim=(0,1,2)) / B
-        rules_frequencies[l] = proba_rules.sum(dim=(2, 3)).flatten()  # (v*m)
         compatible_positions[l] = get_compatible_positions(proba_rules)
 
-    return frac_correct, rules_frequencies, compatible_positions
+    return frac_correct, compatible_positions
 
 
 def get_compatible_positions(proba_rules):
     '''
-    Extract all compatible (rule, sample, position) tuples from proba_rules
+    Extract all compatible (rule, sample, subtuple position in sample) tuples from proba_rules
     Args:
-        proba_rules: torch Tensor, (v, m, B, S_l)
+    proba_rules: torch Tensor, shape (v, m, B, S_l)
     Returns:
-        torch Tensor of shape (N_compatible, 3) where each row contains [rule_id, batch_idx, position_idx]
+    torch Tensor of shape (N_compatible, 3) where each row contains [rule_id, batch_idx, position_idx]
     '''
     v, m, B, S = proba_rules.shape
     # find indices where compatibility is nonzero
@@ -344,7 +342,6 @@ def get_compatible_positions(proba_rules):
     # flatten indices to from range 0 to v*m
     rule_id = vi * m + mi
     return torch.stack([rule_id, bi, pi], dim=1)
-
 
 
 class TimeDiffusionBpRhm(BpRhm):
