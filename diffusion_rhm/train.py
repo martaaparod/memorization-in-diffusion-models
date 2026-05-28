@@ -38,7 +38,7 @@ def evaluate_model(step, args, ddpm, model0, trainloader, testloader, eval_func,
     with torch.no_grad():
         x = next(iter(trainloader))[0].to(args.device)
         x_test = next(iter(testloader))[0].to(args.device)
-        xh = ddpm.sample(8192, (x.shape[1], x.shape[2]), args.device)
+        xh = ddpm.sample(10000, (x.shape[1], x.shape[2]), args.device)
 
         for key, value in eval_func.items():
             if key == "Time_losses":

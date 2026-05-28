@@ -28,7 +28,7 @@ the generated batch:
 python main.py --task train --epochs 100000 --batch_size 512 --lr 1e-5 --train_size 10000
 ```
 2. Sample images from existing checkpoints in the results directory and store the statistics 
-of the generated batch
+of the generated batch.
 
 ```python
 python main.py --task eval --train_size 10000

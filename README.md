@@ -6,7 +6,9 @@ the RHM and CelebA.
 
 ---
 ## Random Hierarchy Model (RHM)
-Derived from the repository [https://github.com/AntonioScl/minimal_diffusion_rhm](https://github.com/AntonioScl/minimal_diffusion_rhm).
+The code provided is derived from the implementation used in *How Compositional Generalization and Creativity Improve as 
+Diffusion Models are Trained* (Favero et al., 2025) available at [https://github.com/AntonioScl/minimal_diffusion_rhm](https://github.com/AntonioScl/minimal_diffusion_rhm).
+
 Contains:
 - Code for building the RHM variants with Zipf distribution and uniqueness of samples
 - Code for training Discrete Diffusion models

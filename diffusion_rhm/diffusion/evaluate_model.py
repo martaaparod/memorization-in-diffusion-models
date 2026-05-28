@@ -161,7 +161,7 @@ def compare_with_trainset(trainset, samples):
         
     Returns:
         frac_copies (float): fraction of samples that are copies of the training set.
-
+        mem_indices (torch.Tensor): indices of elements of the training set that have been generated.
     """
     # samples = torch.argmax(samples, dim=1).reshape(samples.shape[0], -1)
     # dataset = dataset.argmax(dim=1).reshape(dataset.shape[0], -1)
@@ -177,7 +177,11 @@ def compare_with_trainset(trainset, samples):
     matches = (samples @ trainset.T == d)
     frac_copies = matches.any(dim=1).float().mean()
 
-    return frac_copies.item()
+    # training samples that are memorized by at least one generated sample
+    mem_mask = matches.any(dim=0)
+    mem_indices = torch.where(mem_mask)[0]
+
+    return frac_copies.item(), mem_indices.cpu()
 
 
 def compute_d3pm_loss_per_time(n_windows, points_per_window, model, x0, bp=False):
@@ -342,6 +346,7 @@ def get_rule_tuples(coords, samples, test_layer, tuple_size):
     rule_dict = {}
 
     for rule_idx, batch_idx, pos_idx in coords:
+        rule_idx, batch_idx, pos_idx = rule_idx.item(), batch_idx.item(), pos_idx.item()
         # get tuples from samples relevant to rule_idx
         datapoint = samples[batch_idx]
         tuples_datapoint = datapoint.reshape(datapoint.shape[0], -1, tuple_size ** test_layer)

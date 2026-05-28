@@ -28,8 +28,8 @@ def init_data(args, trainloader_shuffle=True):
         # create distribution for rules according to Zipf parameter
         probability = None
 
-        if args.zipf is not None:
-            assert args.layer is not None, "zipf law requires layer of application"
+        if args.zipf_exponent is not None:
+            assert args.zipf_layer is not None, "zipf law requires layer of application"
             probability = {}
             # initialize every layer to be uniformly distributed
             for l in range(args.num_layers):
@@ -37,8 +37,8 @@ def init_data(args, trainloader_shuffle=True):
             zipf_prob = torch.zeros(args.num_synonyms)
             # modify probabilities at layer with Zipf distribution
             for i in range(args.num_synonyms):
-                zipf_prob[i] = (i + 1) ** (- float(args.zipf))
-            probability[args.layer - 1] = zipf_prob / zipf_prob.sum()
+                zipf_prob[i] = (i + 1) ** (- float(args.zipf_exponent))
+            probability[args.zipf_layer - 1] = zipf_prob / zipf_prob.sum()
 
         dataset = datasets.RandomHierarchyModel(
             num_features=args.num_features,  # vocabulary size

@@ -86,8 +86,8 @@ def parse_args() -> Dict:
     )
     parser.add_argument("--input_format", type=str, default="onehot")
     parser.add_argument("--whitening", type=int, default=0)
-    parser.add_argument("--zipf", type=int, help='Zipf law exponent', default=None)
-    parser.add_argument("--layer", type=int, help='layer where Zipf law is introduced', default=None)
+    parser.add_argument("--zipf_exponent", type=int, help='Zipf law exponent', default=None)
+    parser.add_argument("--zipf_layer", type=int, help='layer where Zipf law is introduced', default=None)
     parser.add_argument("--unique", default=False, action="store_true",
                         help="whether enforcing the data generation to be unique under Zipf distribution")
 
@@ -189,7 +189,7 @@ def run_with_grid(train_iter):
         raise
 
 
-def sample_and_analyse_substrings(ddpm, args, trainloader, testloader, eval_func):
+def sample_and_analyze_substrings(ddpm, args, trainloader, testloader, eval_func):
     log_step = {}
 
     steps_per_epoch = len(trainloader)
@@ -198,7 +198,7 @@ def sample_and_analyse_substrings(ddpm, args, trainloader, testloader, eval_func
     with torch.no_grad():
         x = next(iter(trainloader))[0].to(args.device)
         x_test = next(iter(testloader))[0].to(args.device)
-        xh = ddpm.sample(8192, (args.num_features, args.tuple_size**args.num_layers), args.device)
+        xh = ddpm.sample(10000, (args.num_features, args.tuple_size**args.num_layers), args.device)
 
         for key, value in eval_func.items():
             if key == "Time_losses":
@@ -222,16 +222,15 @@ if __name__ == "__main__":
     # setup
     print('Initializing dataset')
     train_loader, test_loader, rules, dataset, rule_freqs, total_logprob_per_sample = init.init_data(args)
-    print('Dataset created')
     ddpm = init.init_model(args)
     ddpm.to(args.device)
     optim_sched = init.init_optimizer(ddpm, args)
     bp = init.init_bp(args, rules)
     eval_func = init.init_eval_func(rules, bp, args, dataset)
 
-    directory = Path(f'./results/{args.output}_ddpm_{args.dataset}_zipf{args.zipf}_layer{args.layer}')
+    directory = Path(f'./results/{args.output}_ddpm_{args.dataset}_zipf{args.zipf_exponent}_layer{args.zipf_layer}')
     if not directory.exists():
-        print("Directory does not exist.")
+        print(f"Directory {directory} does not exist.")
 
     # sample from existing checkpoints and evaluate generated strings
     if args.eval:
@@ -249,7 +248,7 @@ if __name__ == "__main__":
             print(f'Step {step}', flush=True)
 
             ddpm.load_state_dict(torch.load(f'{directory}/{step}.pt', weights_only=False))
-            results[step/len(train_loader)] = sample_and_analyse_substrings(ddpm, args, train_loader, test_loader,
+            results[step/len(train_loader)] = sample_and_analyze_substrings(ddpm, args, train_loader, test_loader,
                                                                     eval_func)
         dict_progress['results'] = results
         torch.save(dict_progress, f'{directory}/test.pt')
